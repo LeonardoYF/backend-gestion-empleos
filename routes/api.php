@@ -24,7 +24,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     // Nuevas rutas protegidas por Sanctum y verificación de usuario
     Route::prefix('profile')->group(function () {
         Route::put('/update', [ProfileController::class, 'updateUser'])->name('profile.update');
-        Route::put('/change-password', [ProfileController::class, 'changePassword'])->name('profile.change-password');
+        Route::put('/change-password', [ProfileController::class, 'updatePassword'])->name('profile.updatePassword');
         Route::delete('/delete-account', [ProfileController::class, 'deleteAccount'])->name('profile.delete-account');
     });
 

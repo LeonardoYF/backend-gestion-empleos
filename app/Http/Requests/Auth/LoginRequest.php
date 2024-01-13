@@ -5,6 +5,7 @@ namespace App\Http\Requests\Auth;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -39,36 +40,31 @@ class LoginRequest extends FormRequest
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function authenticate(): void
-{
-    $this->ensureIsNotRateLimited();
+    public function authenticate(): JsonResponse
+    {
+        $this->ensureIsNotRateLimited();
 
-    $credentials = $this->only('email', 'password');
+        $credentials = $this->only('email', 'password');
 
-    if (! Auth::attempt($credentials, $this->boolean('remember'))) {
-        RateLimiter::hit($this->throttleKey());
+        $user = User::where('email', $credentials['email'])->first();
 
-        $errorMessage = __('auth.failed');
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            RateLimiter::hit($this->throttleKey());
 
-        // Verifica si el error proviene de una contraseña incorrecta
-        if (User::where('email', $credentials['email'])->exists()) {
-            $user = User::where('email', $credentials['email'])->first();
+            $errorMessage = __('auth.failed');
 
-            if ($user && !Hash::check($credentials['password'], $user->password)) {
-                $errorMessage = __('auth.password');
-            }
-        } else {
-            // Si el error no es de una contraseña incorrecta, podría ser de un correo electrónico incorrecto
-            $errorMessage = __('auth.email');
+            throw ValidationException::withMessages([
+                'email' => $errorMessage,
+            ]);
         }
 
-        throw ValidationException::withMessages([
-            'email' => $errorMessage,
-        ]);
-    }
+        RateLimiter::clear($this->throttleKey());
 
-    RateLimiter::clear($this->throttleKey());
-}
+        // Autenticación exitosa
+        Auth::login($user);
+
+        return response()->json(['message' => __('auth.success_message')], 200);
+    }
 
     /**
      * Ensure the login request is not rate limited.
@@ -77,7 +73,7 @@ class LoginRequest extends FormRequest
      */
     public function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        if (!RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
             return;
         }
 
@@ -98,6 +94,6 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->input('email')).'|'.$this->ip());
+        return Str::transliterate(Str::lower($this->input('email')) . '|' . $this->ip());
     }
 }
